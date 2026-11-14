@@ -186,6 +186,36 @@ def test_chap5_repeated_headers_and_page30_fix():
     assert "assets/ur_summary.png" in tex
 
 
+def test_chap7_repeated_headers_and_boq_table():
+    input_dict = {
+        "steel_girders_vol_formula": "0.5 m3",
+        "steel_girders_qty": "2",
+        "steel_girders_vol_total": "1.0",
+        "steel_girders_wt_single": "3.92",
+        "steel_girders_wt_total": "7.85",
+        "rebar_deck_vol_formula": r"\makecell{Designed $A_s$ (15\% laps) \\ $0.1565\text{ m}^3$}",
+        "rebar_deck_qty": "1",
+        "rebar_deck_vol_total": "0.16",
+        "rebar_deck_wt_single": "1.23",
+        "rebar_deck_wt_total": "1.23",
+    }
+    fig_paths = {
+        "boq_steel_tonnage": "assets/boq_steel_tonnage.png",
+        "boq_concrete_rebar": "assets/boq_concrete_rebar.png",
+    }
+    tex = ch7_quantities(input_dict, fig_paths)
+
+    # Requirement 1: Repeated headers via make_longtable_header
+    assert r"\endfirsthead" in tex
+    assert r"\endhead" in tex
+    assert r"\endfoot" in tex
+    assert r"\endlastfoot" in tex
+    assert r"\label{tab:bom}" in tex
+    assert r"\makecell" in tex
+    assert "Figure 7.1: Structural Steel Tonnage Breakdown" in tex
+    assert "Figure 7.2: Concrete Deck Volume vs. Reinforcement Steel Weight" in tex
+
+
 # =============================================================================
 # Requirement 4: Utilization Ratio Chart Generation
 # =============================================================================

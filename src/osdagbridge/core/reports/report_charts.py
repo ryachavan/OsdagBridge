@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import matplotlib
 matplotlib.use("Agg")  # Non-interactive headless backend
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import numpy as np
 
 from osdagbridge.core.utils.common import (
@@ -155,17 +156,17 @@ def generate_ur_summary_chart(
         ax.set_ylabel("Utilization Ratio (UR = Demand / Capacity)", fontsize=9.5, fontweight="bold")
         ax.set_title("Overall Design Check Summary — Utilization Ratios", fontsize=11, fontweight="bold", pad=12)
         ax.set_xticks(x)
-        ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=8.5)
+        ax.set_xticklabels(labels, rotation=35, ha="right", rotation_mode="anchor", fontsize=8.5)
         ax.set_ylim(0, max_val)
         ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
 
-        # Legend
+        # Legend with rectangular color patches and threshold line
         custom_lines = [
-            plt.Line2D([0], [0], color=f"#{COLOR_PASS_HEX}", lw=6, label="Passing (UR $\\leq$ 1.0)"),
-            plt.Line2D([0], [0], color=f"#{COLOR_FAIL_HEX}", lw=6, label="Failing (UR > 1.0)"),
-            plt.Line2D([0], [0], color=f"#{COLOR_FAIL_HEX}", lw=2, linestyle="--", label="Code Limit (UR = 1.0)"),
+            Patch(facecolor=f"#{COLOR_PASS_HEX}", edgecolor="#37474F", linewidth=0.6, label="Passing (UR $\\leq$ 1.0)"),
+            Patch(facecolor=f"#{COLOR_FAIL_HEX}", edgecolor="#37474F", linewidth=0.6, label="Failing (UR > 1.0)"),
+            plt.Line2D([0], [0], color=f"#{COLOR_FAIL_HEX}", lw=1.8, linestyle="--", label="Code Limit (UR = 1.0)"),
         ]
-        ax.legend(handles=custom_lines, loc="upper right", framealpha=0.9, fontsize=8.5)
+        ax.legend(handles=custom_lines, loc="upper right", framealpha=0.92, fontsize=8.5)
 
         plt.tight_layout()
 

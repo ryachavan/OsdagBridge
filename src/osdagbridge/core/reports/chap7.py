@@ -4,7 +4,7 @@
 
 from typing import Optional, Dict
 from osdagbridge.core.reports.report_utils import _fig_embed
-from osdagbridge.core.reports.styles import make_table_note
+from osdagbridge.core.reports.styles import make_longtable_header, make_table_note
 
 
 def ch7_quantities(input_dict: dict, fig_paths: Optional[Dict[str, str]] = None) -> str:
@@ -93,6 +93,15 @@ def ch7_quantities(input_dict: dict, fig_paths: Optional[Dict[str, str]] = None)
 """ + fig_concrete_rebar + r"""
 """
 
+    bom_header = make_longtable_header(
+        col_spec="|C{1.0cm}|L{3.8cm}|C{2.6cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|",
+        caption="Bill of Materials (Steel, Concrete, and Reinforcement Quantities)",
+        header_row=r"\textbf{S.N.} & \textbf{Item Description} & \textbf{Volume} & \textbf{Quantity} & \textbf{Total Volume} & \textbf{Weight (MT)} & \textbf{Total Weight (MT)}",
+        num_cols=7,
+        label="tab:bom",
+        cont_caption="Bill of Materials (Table 7.1 continued)"
+    )
+
     return r"""
 \chapter{Material Take-off \& Quantity Summary}
 \label{ch:material-takeoff}
@@ -103,26 +112,7 @@ This section summarizes the material quantities computed for the bridge superstr
 
 \begingroup
 \setlength{\tabcolsep}{3.5pt}
-\begin{longtable}{|C{1.0cm}|L{3.8cm}|C{2.6cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|}
-\caption{\textbf{Bill of Materials (Steel, Concrete, and Reinforcement Quantities)}}\label{tab:bom}\\
-\hline
-\textbf{S.N.} & \textbf{Item Description} & \textbf{Volume} & \textbf{Quantity} & \textbf{Total Volume} & \textbf{Weight (MT)} & \textbf{Total Weight (MT)} \\[6pt]
-\hline
-\endfirsthead
-
-\caption*{(Table 7.1 continued)}\\
-\hline
-\textbf{S.N.} & \textbf{Item Description} & \textbf{Volume} & \textbf{Quantity} & \textbf{Total Volume} & \textbf{Weight (MT)} & \textbf{Total Weight (MT)} \\[6pt]
-\hline
-\endhead
-
-\hline
-\multicolumn{7}{r}{\footnotesize\textit{Continued on next page\dots}} \\[2pt]
-\endfoot
-
-\hline
-\endlastfoot
-
+""" + bom_header + r"""
 1 & Structural Steel (IS 2062) for Girders & """ + steel_girders_f + r""" & """ + steel_girders_q + r""" & """ + steel_girders_vt + r""" & """ + steel_girders_ws + r""" & """ + steel_girders_wt + r""" \\[6pt]
 \hline
 2(a) & Cross Bracing - Top Chord & """ + bracing_top_f + r""" & """ + bracing_top_q + r""" & """ + bracing_top_vt + r""" & """ + bracing_top_ws + r""" & """ + bracing_top_wt + r""" \\[6pt]

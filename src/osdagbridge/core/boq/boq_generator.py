@@ -172,8 +172,8 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                                 rebar_wt_kg = rebar_vol * 7850.0
                                 rebar_wt_mt = rebar_wt_kg / 1000.0
                                 quantities["rebar_deck_vol_formula"] = (
-                                    f"$\\text{{Designed }} A_s\\text{{ (incl. 15\\% laps): }} "
-                                    f"{rebar_vol:.5f}\\text{{ m}}^3$"
+                                    f"\\makecell{{Designed $A_s$ (15\\% laps) \\\\ "
+                                    f"${rebar_vol:.5f}\\text{{ m}}^3$}}"
                                 )
                                 quantities["rebar_deck_qty"] = "1"
                                 quantities["rebar_deck_vol_total"] = f"{rebar_vol:.2f}"
@@ -189,8 +189,8 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                         rebar_vol = rebar_wt_kg / 7850.0
                         rebar_wt_mt = rebar_wt_kg / 1000.0
                         quantities["rebar_deck_vol_formula"] = (
-                            f"$\\text{{Estimated: }} 120\\text{{ kg/m}}^3\\text{{ conc.}} \\times "
-                            f"{concrete_vol:.2f}\\text{{ m}}^3 = {rebar_vol:.5f}\\text{{ m}}^3$"
+                            f"\\makecell{{Est. ($120\\text{{ kg/m}}^3\\text{{ conc.}})$ \\\\ "
+                            f"$= {rebar_vol:.5f}\\text{{ m}}^3$}}"
                         )
                         quantities["rebar_deck_qty"] = "1"
                         quantities["rebar_deck_vol_total"] = f"{rebar_vol:.2f}"
