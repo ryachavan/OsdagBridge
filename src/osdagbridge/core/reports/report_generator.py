@@ -119,6 +119,13 @@ from osdagbridge.core.utils.common import (
 )
 
 from osdagbridge.core.reports.report_utils import _tex
+from .styles import GEOMETRY_OPTIONS, LATEX_COLOR_DEFS
+from .report_charts import (
+    generate_ur_summary_chart,
+    generate_steel_tonnage_chart,
+    generate_concrete_rebar_chart,
+    extract_ur_chart_items,
+)
 from .executive_summary import executive_summary
 from .chap1 import ch1_project_info
 from .chap2 import ch2_input_parameters
@@ -156,7 +163,7 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
 \documentclass[12pt,a4paper]{report}
 
 % Packages
-\usepackage[a4paper, margin=1in]{geometry}
+\usepackage[""" + GEOMETRY_OPTIONS + r"""]{geometry}
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -202,11 +209,11 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
 \setlength{\extrarowheight}{0.6pt}
 
 % Prevent tables from overflowing past the page bottom:
-% if fewer than 5 baseline-skips remain, break to the next page first.
-\BeforeBeginEnvironment{table}{\needspace{5\baselineskip}}
-\BeforeBeginEnvironment{longtable}{\needspace{5\baselineskip}}
+% if fewer than 6 baseline-skips remain, break to the next page first.
+\BeforeBeginEnvironment{table}{\needspace{6\baselineskip}}
+\BeforeBeginEnvironment{longtable}{\needspace{6\baselineskip}}
 
-\definecolor{osdagGreen}{HTML}{91B014}
+""" + LATEX_COLOR_DEFS + r"""
 
 \fancypagestyle{main}{
   \fancyhf{}
@@ -217,13 +224,10 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
   \renewcommand{\headrule}{\color{osdagGreen}\hrule width\headwidth height 1pt \vspace{2pt}}
   \renewcommand{\footrule}{%
     \ifbool{hasSDonPage}{%
-      \vspace{-20pt}%
       \hbox to \headwidth{\textcolor{black}{\footnotesize\textit{* Software default value}}\hfil}%
-      \vspace{4pt}%
-    }{%
-      \vspace{-8pt}%
-    }%
-    \color{osdagGreen}\hrule width\headwidth height 1pt \vspace{6pt}%
+      \vspace{2pt}%
+    }{}%
+    \color{osdagGreen}\hrule width\headwidth height 1pt \vspace{4pt}%
   }
 }
 \fancypagestyle{plain}{
@@ -235,13 +239,10 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
   \renewcommand{\headrule}{\color{osdagGreen}\hrule width\headwidth height 1pt \vspace{2pt}}
   \renewcommand{\footrule}{%
     \ifbool{hasSDonPage}{%
-      \vspace{-20pt}%
       \hbox to \headwidth{\textcolor{black}{\footnotesize\textit{* Software default value}}\hfil}%
-      \vspace{4pt}%
-    }{%
-      \vspace{-8pt}%
-    }%
-    \color{osdagGreen}\hrule width\headwidth height 1pt \vspace{6pt}%
+      \vspace{2pt}%
+    }{}%
+    \color{osdagGreen}\hrule width\headwidth height 1pt \vspace{4pt}%
   }
 }
 \fancypagestyle{firstpage}{
@@ -249,7 +250,7 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
   \renewcommand{\headrulewidth}{0pt}
   \fancyfoot[L]{Osdag $|$ FOSSEE $|$ Indian Institute of Technology Bombay}
   \fancyfoot[R]{Page \thepage\ of \pageref{LastPage}}
-  \renewcommand{\footrule}{\vspace{-8pt}\color{osdagGreen}\hrule width\headwidth height 1pt \vspace{6pt}}
+  \renewcommand{\footrule}{\color{osdagGreen}\hrule width\headwidth height 1pt \vspace{4pt}}
 }
 \pagestyle{main}
 \setstretch{1.15}
@@ -479,7 +480,10 @@ class ReportDataBridge:
         member    "diagonal" or "chord"
         force_type "tension" or "compression"
         """
-        from osdagbridge.core.bridge_types.plate_girder.results_data import _extract_osdag_summary
+        try:
+            from osdagbridge.core.bridge_types.plate_girder.results_data import _extract_osdag_summary
+        except Exception:
+            from .report_charts import _extract_osdag_summary
         try:
             raw = self._cb_pair_designs()[pair][member][force_type]
             return _extract_osdag_summary(raw or {})
@@ -632,6 +636,152 @@ class ReportDataBridge:
             return f"{self.get_cb_geometry().get('alpha_deg', 0):.2f}"
         except Exception:
             return ""
+
+    # =====================================================================
+    # CHAPTER 5: END DIAPHRAGMS
+    # =====================================================================
+
+    def _ed_forces_dict(self) -> dict:
+        """Internal: return end_diaphragm_forces_dict from output_dict."""
+        return self.output_dict.get("end_diaphragm_forces_dict", {}) or {}
+
+    def _ed_pair_designs(self) -> dict:
+        """Internal: return end_diaphragm_design_results from output_dict."""
+        return self.output_dict.get("end_diaphragm_design_results", {}) or {}
+
+    def _ed_osdag(self, pair: str, member: str, force_type: str) -> dict:
+        """
+        Extract the _extract_osdag_summary dict for one member.
+        pair       e.g. "G1-G2"
+        member     "diagonal" or "chord"
+        force_type "tension" or "compression"
+        """
+        try:
+            from osdagbridge.core.bridge_types.plate_girder.results_data import _extract_osdag_summary
+        except Exception:
+            from .report_charts import _extract_osdag_summary
+        try:
+            raw = self._ed_pair_designs()[pair][member][force_type]
+            return _extract_osdag_summary(raw or {})
+        except (KeyError, TypeError):
+            return {}
+
+    def get_ed_pairs(self) -> list:
+        """Return sorted list of end-diaphragm girder pair keys e.g. ['G1-G2', 'G2-G3']."""
+        try:
+            pairs = list(self._ed_forces_dict().get("pairs", {}).keys())
+            if pairs:
+                return sorted(pairs)
+        except Exception:
+            pass
+        try:
+            pairs = list(self._ed_pair_designs().keys())
+            if pairs:
+                return sorted(pairs)
+        except Exception:
+            pass
+        return []
+
+    def get_ed_force(self, pair: str, member: str, force_type: str) -> str:
+        """Return demand force string for end diaphragm."""
+        try:
+            pairs = self._ed_forces_dict()["pairs"][pair]
+            key = f"diag_{force_type}_kN" if member == "diagonal" else f"chord_{force_type}_kN"
+            val = pairs.get(key)
+            if val is not None:
+                return f"{val:.3f}"
+        except (KeyError, TypeError):
+            pass
+        return ""
+
+    def get_ed_nature(self, pair: str, member: str) -> str:
+        """Return 'T', 'C', or 'T/C' depending on what forces exist for this member."""
+        try:
+            pairs = self._ed_forces_dict()["pairs"][pair]
+            t_key = "diag_tension_kN"     if member == "diagonal" else "chord_tension_kN"
+            c_key = "diag_compression_kN" if member == "diagonal" else "chord_compression_kN"
+            has_t = pairs.get(t_key) is not None
+            has_c = pairs.get(c_key) is not None
+            if has_t and has_c:
+                return "T / C"
+            if has_t:
+                return "T"
+            if has_c:
+                return "C"
+        except (KeyError, TypeError):
+            pass
+        return ""
+
+    def get_ed_governing_force(self, pair: str, member: str) -> tuple:
+        """Return (force_kN_str, force_type) for the governing (max absolute) force."""
+        try:
+            pairs = self._ed_forces_dict()["pairs"][pair]
+            t_key = "diag_tension_kN"     if member == "diagonal" else "chord_tension_kN"
+            c_key = "diag_compression_kN" if member == "diagonal" else "chord_compression_kN"
+            t_val = pairs.get(t_key)
+            c_val = pairs.get(c_key)
+            if t_val is not None and c_val is not None:
+                if abs(c_val) >= abs(t_val):
+                    return (f"{c_val:.3f}", "compression")
+                return (f"{t_val:.3f}", "tension")
+            if c_val is not None:
+                return (f"{c_val:.3f}", "compression")
+            if t_val is not None:
+                return (f"{t_val:.3f}", "tension")
+        except (KeyError, TypeError):
+            pass
+        return ("", "compression")
+
+    def get_ed_section(self, pair: str, member: str, force_type: str) -> str:
+        """Section designation for an end diaphragm member."""
+        val = self._ed_osdag(pair, member, force_type).get("section")
+        return _tex(val) if val else ""
+
+    def get_ed_capacity(self, pair: str, member: str, force_type: str) -> str:
+        """Capacity in kN."""
+        val = self._ed_osdag(pair, member, force_type).get("capacity_kN")
+        return f"{float(val):.3f}" if val is not None else ""
+
+    def get_ed_efficiency(self, pair: str, member: str, force_type: str) -> str:
+        """Utilization ratio (efficiency)."""
+        val = self._ed_osdag(pair, member, force_type).get("efficiency")
+        return f"{float(val):.3f}" if val is not None else ""
+
+    def get_ed_slenderness(self, pair: str, member: str) -> str:
+        """KL/r — from Osdag summary."""
+        for ft in ("compression", "tension"):
+            val = self._ed_osdag(pair, member, ft).get("slenderness")
+            if val is not None:
+                return f"{float(val):.1f}"
+        return ""
+
+    def get_ed_status(self, pair: str, member: str, force_type: str) -> str:
+        """PASS / FAIL based on UR <= 1.0."""
+        try:
+            val = self._ed_osdag(pair, member, force_type).get("efficiency")
+            if val is not None:
+                ur = float(val)
+                if ur <= 1.0:
+                    return r"\textcolor{black}{PASS}"
+                return r"\textcolor{red}{FAIL}"
+        except (TypeError, ValueError):
+            pass
+        return ""
+
+    def get_ed_gov_lc(self, pair: str, member: str, force_type: str) -> str:
+        """Governing load case label for member."""
+        try:
+            pfx = "diag" if member == "diagonal" else "chord"
+            key = f"{pfx}_{force_type}_gov_lc"
+            val = self._ed_forces_dict()["pairs"][pair].get(key)
+            return _tex(val) if val else ""
+        except (KeyError, TypeError):
+            return ""
+
+    def get_ed_connection(self, pair: str, member: str, force_type: str) -> str:
+        """Return 'Welded' or 'Bolted'."""
+        val = self._ed_osdag(pair, member, force_type).get("connection")
+        return str(val) if val else ""
 
 def _format_project_location(pl_data):
     if not pl_data:
@@ -903,6 +1053,29 @@ def generate_report(payload, request):
             bridge = ReportDataBridge(payload.output_dict, payload.inputs, payload)
             span_m = float(payload.inputs.get(KEY_SPAN, 0) or 0)
 
+            # ── Generate dynamic charts for Section 5.5 and Chapter 7 ──
+            try:
+                ur_items = extract_ur_chart_items(payload.output_dict, payload.inputs, bridge=bridge)
+                ur_chart_path = os.path.join(tmp_images, 'ur_summary.png')
+                generate_ur_summary_chart(ur_items, output_path=ur_chart_path)
+                fig_paths['ur_summary'] = ur_chart_path.replace('\\', '/')
+            except Exception as e:
+                logger.warning("Failed to generate UR summary chart: %s", e)
+
+            try:
+                boq_steel_path = os.path.join(tmp_images, 'boq_steel_tonnage.png')
+                generate_steel_tonnage_chart(payload.inputs, output_path=boq_steel_path)
+                fig_paths['boq_steel_tonnage'] = boq_steel_path.replace('\\', '/')
+            except Exception as e:
+                logger.warning("Failed to generate BOQ steel tonnage chart: %s", e)
+
+            try:
+                boq_conc_path = os.path.join(tmp_images, 'boq_concrete_rebar.png')
+                generate_concrete_rebar_chart(payload.inputs, output_path=boq_conc_path)
+                fig_paths['boq_concrete_rebar'] = boq_conc_path.replace('\\', '/')
+            except Exception as e:
+                logger.warning("Failed to generate BOQ concrete rebar chart: %s", e)
+
             doc_parts = []
             doc_parts.append(preamble(payload.metadata.project_name, payload.metadata.job_number, payload.metadata.report_date, payload.metadata.subtitle or 'Rev 0'))
             doc_parts.append(title_page(payload.metadata, osdag_logo_latex, org_logo_latex))
@@ -924,11 +1097,11 @@ def generate_report(payload, request):
             if 'analysis' in secs:
                 doc_parts.append(ch4_analysis(payload.analysis_summary, fig_paths, bridge, span_m))
             if 'design_checks' in secs:
-                doc_parts.append(ch5_design_checks(payload.design_checks, bridge))
+                doc_parts.append(ch5_design_checks(payload.design_checks, bridge, fig_paths))
             if 'drawings' in secs and payload.options.include_figures:
                 doc_parts.append(ch6_drawings(fig_paths))
 
-            doc_parts.append(ch7_quantities(payload.inputs))
+            doc_parts.append(ch7_quantities(payload.inputs, fig_paths))
 
             mode = str(payload.inputs.get(KEY_DESIGN_MODE, "Optimized")).strip().lower()
             is_custom = mode in {"custom", "customized"}

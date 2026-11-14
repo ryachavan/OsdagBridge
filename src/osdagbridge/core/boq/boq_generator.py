@@ -65,6 +65,30 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
         "bracing_diag_vol_total": "N.A.",
         "bracing_diag_wt_single": "N.A.",
         "bracing_diag_wt_total": "N.A.",
+
+        "steel_ed_vol_formula": r"\placeholder{Area $\times$ Length}",
+        "steel_ed_qty": "N.A.",
+        "steel_ed_vol_total": "N.A.",
+        "steel_ed_wt_single": "N.A.",
+        "steel_ed_wt_total": "0.00",
+
+        "ed_top_vol_formula": r"\placeholder{Area $\times$ Length}",
+        "ed_top_qty": "N.A.",
+        "ed_top_vol_total": "N.A.",
+        "ed_top_wt_single": "N.A.",
+        "ed_top_wt_total": "0.00",
+
+        "ed_bot_vol_formula": r"\placeholder{Area $\times$ Length}",
+        "ed_bot_qty": "N.A.",
+        "ed_bot_vol_total": "N.A.",
+        "ed_bot_wt_single": "N.A.",
+        "ed_bot_wt_total": "0.00",
+
+        "ed_diag_vol_formula": r"\placeholder{Area $\times$ Length}",
+        "ed_diag_qty": "N.A.",
+        "ed_diag_vol_total": "N.A.",
+        "ed_diag_wt_single": "N.A.",
+        "ed_diag_wt_total": "0.00",
         
         "concrete_deck_vol_formula": r"\placeholder{Width $\times$ Thickness $\times$ Length}",
         "concrete_deck_qty": "N.A.",
@@ -106,8 +130,16 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             return quantities
 
         # 1. Concrete deck volume (Cu.m) and Weight (MT)
-        overall_width_val = inputs.get("typical_section.overall_bridge_width")
-        deck_thickness_val = inputs.get(KEY_TS_DECK_THICKNESS)
+        overall_width_val = (
+            inputs.get("typical_section.overall_bridge_width")
+            or inputs.get("typical_section.deck.overall_width")
+            or inputs.get("overall_width")
+        )
+        deck_thickness_val = (
+            inputs.get(KEY_TS_DECK_THICKNESS)
+            or inputs.get("typical_section.deck.thickness")
+            or inputs.get("deck_thickness")
+        )
         
         if overall_width_val is not None and deck_thickness_val is not None:
             try:
@@ -122,16 +154,48 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                     quantities["concrete_deck_wt_total"] = f"{(concrete_vol * 2.5):.2f}"
 
                     # 2. Reinforcement Steel (Cu.m) and Weight (MT)
-                    rebar_wt_kg = concrete_vol * 120.0
-                    rebar_vol = rebar_wt_kg / 7850.0
-                    rebar_area = rebar_vol / span if span > 0 else 0.0
-                    quantities["rebar_deck_vol_formula"] = f"${rebar_area:.6f}\\text{{ m}}^2 \\times {span:.2f}\\text{{ m}} = {rebar_vol:.5f}\\text{{ m}}^3$"
-                    quantities["rebar_deck_qty"] = "1"
-                    quantities["rebar_deck_vol_total"] = f"{rebar_vol:.2f}"
-                    
-                    rebar_wt_mt = rebar_wt_kg / 1000.0
-                    quantities["rebar_deck_wt_single"] = f"{rebar_wt_mt:.2f}"
-                    quantities["rebar_deck_wt_total"] = f"{rebar_wt_mt:.2f}"
+                    dd_results = outputs.get("deck_design_results", {}) or {}
+                    as_bot = dd_results.get("rebar_bottom_area")
+                    as_top = dd_results.get("rebar_top_area")
+                    as_long = dd_results.get("rebar_long_area")
+
+                    has_detailed_rebar = False
+                    if as_bot is not None and as_top is not None:
+                        try:
+                            as_bot_f = float(as_bot)  # mm²/m
+                            as_top_f = float(as_top)  # mm²/m
+                            as_long_f = float(as_long) if as_long is not None else (0.2 * (as_bot_f + as_top_f))
+                            if as_bot_f > 0 and as_top_f > 0:
+                                vol_trans = (as_bot_f + as_top_f) * 1e-6 * overall_width * span
+                                vol_long = as_long_f * 1e-6 * overall_width * span
+                                rebar_vol = (vol_trans + vol_long) * 1.15  # 15% allowance for laps and hooks
+                                rebar_wt_kg = rebar_vol * 7850.0
+                                rebar_wt_mt = rebar_wt_kg / 1000.0
+                                quantities["rebar_deck_vol_formula"] = (
+                                    f"$\\text{{Designed }} A_s\\text{{ (incl. 15\\% laps): }} "
+                                    f"{rebar_vol:.5f}\\text{{ m}}^3$"
+                                )
+                                quantities["rebar_deck_qty"] = "1"
+                                quantities["rebar_deck_vol_total"] = f"{rebar_vol:.2f}"
+                                quantities["rebar_deck_wt_single"] = f"{rebar_wt_mt:.2f}"
+                                quantities["rebar_deck_wt_total"] = f"{rebar_wt_mt:.2f}"
+                                has_detailed_rebar = True
+                        except (TypeError, ValueError):
+                            has_detailed_rebar = False
+
+                    if not has_detailed_rebar:
+                        # Standard empirical estimate per IRC guidelines (120 kg/m³ of deck concrete)
+                        rebar_wt_kg = concrete_vol * 120.0
+                        rebar_vol = rebar_wt_kg / 7850.0
+                        rebar_wt_mt = rebar_wt_kg / 1000.0
+                        quantities["rebar_deck_vol_formula"] = (
+                            f"$\\text{{Estimated: }} 120\\text{{ kg/m}}^3\\text{{ conc.}} \\times "
+                            f"{concrete_vol:.2f}\\text{{ m}}^3 = {rebar_vol:.5f}\\text{{ m}}^3$"
+                        )
+                        quantities["rebar_deck_qty"] = "1"
+                        quantities["rebar_deck_vol_total"] = f"{rebar_vol:.2f}"
+                        quantities["rebar_deck_wt_single"] = f"{rebar_wt_mt:.2f} (est.)"
+                        quantities["rebar_deck_wt_total"] = f"{rebar_wt_mt:.2f}"
             except Exception:
                 pass
 
@@ -277,11 +341,35 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                     cb_spacing = float(cb_spacing_val)
                 except Exception:
                     pass
-                    
+
+            if cb_spacing <= 0.0:
+                for k, v in inputs.items():
+                    if "cross_bracing_spacing" in str(k).lower() and v:
+                        try:
+                            cb_spacing = float(v)
+                            break
+                        except Exception:
+                            pass
+
+            panel_assumed = False
             if cb_spacing > 0.0:
                 n_panels = max(1, round(span / cb_spacing) - 1)
             else:
-                n_panels = max(3, int(span / 5.0))
+                n_brac = None
+                for k, v in inputs.items():
+                    if "no_of_cross_bracings" in str(k).lower() and v:
+                        try:
+                            n_brac = int(v)
+                            break
+                        except Exception:
+                            pass
+                if n_brac is not None and n_brac > 0:
+                    n_panels = n_brac + 1
+                else:
+                    n_panels = max(3, int(span / 5.0))
+                    panel_assumed = True
+
+            panel_note = r"\text{ (assumed 5m panel spacing)}" if panel_assumed else ""
 
             # 5a. Top Chord
             top_chord_qty = (n_girders - 1) * n_panels if top_chord_enabled else 0
@@ -290,7 +378,7 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             top_chord_wt_single = top_chord_vol_single * 7.85
             top_chord_wt_total = top_chord_vol_total * 7.85
             
-            quantities["bracing_top_vol_formula"] = f"${bracing_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {top_chord_vol_single:.5f}\\text{{ m}}^3$"
+            quantities["bracing_top_vol_formula"] = f"${bracing_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {top_chord_vol_single:.5f}\\text{{ m}}^3{panel_note}$"
             quantities["bracing_top_qty"] = str(top_chord_qty)
             quantities["bracing_top_vol_total"] = f"{top_chord_vol_total:.2f}" if top_chord_enabled else "0.00"
             quantities["bracing_top_wt_single"] = f"{top_chord_wt_single:.4f}"
@@ -303,7 +391,7 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             bot_chord_wt_single = bot_chord_vol_single * 7.85
             bot_chord_wt_total = bot_chord_vol_total * 7.85
             
-            quantities["bracing_bot_vol_formula"] = f"${bracing_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {bot_chord_vol_single:.5f}\\text{{ m}}^3$"
+            quantities["bracing_bot_vol_formula"] = f"${bracing_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {bot_chord_vol_single:.5f}\\text{{ m}}^3{panel_note}$"
             quantities["bracing_bot_qty"] = str(bot_chord_qty)
             quantities["bracing_bot_vol_total"] = f"{bot_chord_vol_total:.2f}" if bot_chord_enabled else "0.00"
             quantities["bracing_bot_wt_single"] = f"{bot_chord_wt_single:.4f}"
@@ -316,7 +404,7 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             diag_wt_single = diag_vol_single * 7.85
             diag_wt_total = diag_vol_total * 7.85
             
-            quantities["bracing_diag_vol_formula"] = f"${bracing_area:.5f}\\text{{ m}}^2 \\times {bracing_len:.2f}\\text{{ m}} = {diag_vol_single:.5f}\\text{{ m}}^3$"
+            quantities["bracing_diag_vol_formula"] = f"${bracing_area:.5f}\\text{{ m}}^2 \\times {bracing_len:.2f}\\text{{ m}} = {diag_vol_single:.5f}\\text{{ m}}^3{panel_note}$"
             quantities["bracing_diag_qty"] = str(diags_qty)
             quantities["bracing_diag_vol_total"] = f"{diag_vol_total:.2f}"
             quantities["bracing_diag_wt_single"] = f"{diag_wt_single:.4f}"
@@ -329,6 +417,119 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                 quantities[f"{prefix}_vol_total"] = "N.A."
                 quantities[f"{prefix}_wt_single"] = "N.A."
                 quantities[f"{prefix}_wt_total"] = "N.A."
+
+        # 5d. End Diaphragms (Cu.m) and Weight (MT)
+        # End diaphragms are present at the 2 ends of the span across each girder bay.
+        ed_area = 0.0
+        ed_len = 0.0
+
+        # Query actual end-diaphragm section properties only.
+        # NEVER substitute cross-bracing section properties for end diaphragms.
+        for k, v in outputs.items():
+            if str(k).startswith("transverse_member_design.ed.section_properties.bracing.") and str(k).endswith(".A"):
+                try:
+                    val = float(v)
+                    if val > 0.0:
+                        ed_area = val / 10000.0  # cm² to m²
+                        break
+                except (TypeError, ValueError):
+                    pass
+
+        if ed_area <= 0.0:
+            for k, v in outputs.items():
+                if "transverse_member_design.ed.section_properties." in str(k) and str(k).endswith(".A"):
+                    try:
+                        val = float(v)
+                        if val > 0.0:
+                            ed_area = val / 10000.0  # cm² to m²
+                            break
+                    except (TypeError, ValueError):
+                        pass
+
+        ed_forces = outputs.get("end_diaphragm_forces_dict")
+        if ed_forces and isinstance(ed_forces, dict):
+            ed_geom = ed_forces.get("geometry", {}) or {}
+            ed_len_val = ed_geom.get("diagonal_length_m")
+            if ed_len_val is not None:
+                try:
+                    ed_len = float(ed_len_val)
+                except (TypeError, ValueError):
+                    pass
+
+        ed_type = ""
+        for k, v in inputs.items():
+            if "end_diaphragm_type" in str(k).lower() and v:
+                ed_type = str(v)
+                break
+
+        is_ed_cb = "brac" in ed_type.strip().lower()
+
+        if ed_area > 0.0 and spacing > 0.0:
+            n_ed_bays = (n_girders - 1) * 2
+            if is_ed_cb and ed_len > 0.0:
+                # Cross-braced end diaphragm
+                ed_top_qty = n_ed_bays
+                ed_bot_qty = n_ed_bays
+                ed_diag_qty = n_ed_bays * 2
+
+                ed_top_vol_single = ed_area * spacing
+                ed_top_vol_tot = ed_top_qty * ed_top_vol_single
+                ed_bot_vol_single = ed_area * spacing
+                ed_bot_vol_tot = ed_bot_qty * ed_bot_vol_single
+                ed_diag_vol_single = ed_area * ed_len
+                ed_diag_vol_tot = ed_diag_qty * ed_diag_vol_single
+
+                ed_vol_tot = ed_top_vol_tot + ed_bot_vol_tot + ed_diag_vol_tot
+                ed_wt_tot = ed_vol_tot * 7.85
+
+                quantities["ed_top_vol_formula"] = f"${ed_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {ed_top_vol_single:.5f}\\text{{ m}}^3$"
+                quantities["ed_top_qty"] = str(ed_top_qty)
+                quantities["ed_top_vol_total"] = f"{ed_top_vol_tot:.2f}"
+                quantities["ed_top_wt_single"] = f"{ed_top_vol_single * 7.85:.4f}"
+                quantities["ed_top_wt_total"] = f"{ed_top_vol_tot * 7.85:.2f}"
+
+                quantities["ed_bot_vol_formula"] = f"${ed_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {ed_bot_vol_single:.5f}\\text{{ m}}^3$"
+                quantities["ed_bot_qty"] = str(ed_bot_qty)
+                quantities["ed_bot_vol_total"] = f"{ed_bot_vol_tot:.2f}"
+                quantities["ed_bot_wt_single"] = f"{ed_bot_vol_single * 7.85:.4f}"
+                quantities["ed_bot_wt_total"] = f"{ed_bot_vol_tot * 7.85:.2f}"
+
+                quantities["ed_diag_vol_formula"] = f"${ed_area:.5f}\\text{{ m}}^2 \\times {ed_len:.2f}\\text{{ m}} = {ed_diag_vol_single:.5f}\\text{{ m}}^3$"
+                quantities["ed_diag_qty"] = str(ed_diag_qty)
+                quantities["ed_diag_vol_total"] = f"{ed_diag_vol_tot:.2f}"
+                quantities["ed_diag_wt_single"] = f"{ed_diag_vol_single * 7.85:.4f}"
+                quantities["ed_diag_wt_total"] = f"{ed_diag_vol_tot * 7.85:.2f}"
+
+                quantities["steel_ed_vol_formula"] = f"${ed_area:.5f}\\text{{ m}}^2$"
+                quantities["steel_ed_qty"] = str(ed_top_qty + ed_bot_qty + ed_diag_qty)
+                quantities["steel_ed_vol_total"] = f"{ed_vol_tot:.2f}"
+                quantities["steel_ed_wt_total"] = f"{ed_wt_tot:.2f}"
+            else:
+                # Beam end diaphragm (Rolled Beam or Welded Beam): 1 transverse beam per bay at each end
+                n_ed_beams = n_ed_bays
+                ed_beam_vol_single = ed_area * spacing
+                ed_vol_tot = n_ed_beams * ed_beam_vol_single
+                ed_wt_tot = ed_vol_tot * 7.85
+
+                quantities["steel_ed_vol_formula"] = f"${ed_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {ed_beam_vol_single:.5f}\\text{{ m}}^3$"
+                quantities["steel_ed_qty"] = str(n_ed_beams)
+                quantities["steel_ed_vol_total"] = f"{ed_vol_tot:.2f}"
+                quantities["steel_ed_wt_total"] = f"{ed_wt_tot:.2f}"
+
+                for prefix in ("ed_top", "ed_bot", "ed_diag"):
+                    quantities[f"{prefix}_vol_formula"] = "N.A."
+                    quantities[f"{prefix}_qty"] = "N.A."
+                    quantities[f"{prefix}_vol_total"] = "N.A."
+                    quantities[f"{prefix}_wt_single"] = "N.A."
+                    quantities[f"{prefix}_wt_total"] = "0.00"
+        else:
+            # End diaphragms not designed / no valid section properties found
+            for prefix in ("ed_top", "ed_bot", "ed_diag", "steel_ed"):
+                quantities[f"{prefix}_vol_formula"] = "N.A."
+                quantities[f"{prefix}_qty"] = "N.A."
+                quantities[f"{prefix}_vol_total"] = "N.A."
+                quantities[f"{prefix}_wt_single"] = "N.A."
+                quantities[f"{prefix}_wt_total"] = "0.00"
 
         # 6. Crash Barrier (Cu.m) and Weight (MT)
         KEY_CB_AREA = "typical_section.crash_barrier.area"
